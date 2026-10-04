@@ -1,0 +1,129 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local Player = Players.LocalPlayer
+
+local UndergroundDistance = 10
+local Hidden = false
+local SavedPivot = nil
+local SavedAnchored = {}
+
+-- GUI
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "UndergroundToggle"
+Gui.ResetOnSpawn = false
+Gui.Parent = game:GetService("CoreGui")
+
+local Button = Instance.new("TextButton")
+Button.Size = UDim2.fromOffset(60, 60)
+Button.Position = UDim2.new(0.1, 0, 0.5, 0)
+Button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+Button.Text = ""
+Button.AutoButtonColor = false
+Button.Parent = Gui
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(1, 0)
+Corner.Parent = Button
+
+-- Dragging
+local Dragging = false
+local DragStart
+local StartPosition
+
+Button.InputBegan:Connect(function(Input)
+    if Input.UserInputType == Enum.UserInputType.MouseButton1
+        or Input.UserInputType == Enum.UserInputType.Touch then
+
+        Dragging = true
+        DragStart = Input.Position
+        StartPosition = Button.Position
+
+        Input.Changed:Connect(function()
+            if Input.UserInputState == Enum.UserInputState.End then
+                Dragging = false
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(Input)
+    if Dragging and (
+        Input.UserInputType == Enum.UserInputType.MouseMovement
+        or Input.UserInputType == Enum.UserInputType.Touch
+    ) then
+        local Delta = Input.Position - DragStart
+
+        Button.Position = UDim2.new(
+            StartPosition.X.Scale,
+            StartPosition.X.Offset + Delta.X,
+            StartPosition.Y.Scale,
+            StartPosition.Y.Offset + Delta.Y
+        )
+    end
+end)
+
+local function GetCharacter()
+    return Player.Character
+end
+
+local function HideCharacter()
+    local Character = GetCharacter()
+    if not Character then return end
+
+    SavedPivot = Character:GetPivot()
+    SavedAnchored = {}
+
+    -- Remember each part's original Anchored state
+    for _, Object in ipairs(Character:GetDescendants()) do
+        if Object:IsA("BasePart") then
+            SavedAnchored[Object] = Object.Anchored
+            Object.Anchored = true
+        end
+    end
+
+    -- Move exactly 10 studs underneath the original position
+    Character:PivotTo(
+        SavedPivot * CFrame.new(0, -UndergroundDistance, 0)
+    )
+
+    Hidden = true
+    Button.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+end
+
+local function ShowCharacter()
+    local Character = GetCharacter()
+    if not Character or not SavedPivot then return end
+
+    -- Put them back exactly where they were
+    Character:PivotTo(SavedPivot)
+
+    -- Restore original Anchored states
+    for Object, WasAnchored in pairs(SavedAnchored) do
+        if Object and Object.Parent then
+            Object.Anchored = WasAnchored
+        end
+    end
+
+    Hidden = false
+    SavedPivot = nil
+    SavedAnchored = {}
+
+    Button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+end
+
+Button.Activated:Connect(function()
+    if Hidden then
+        ShowCharacter()
+    else
+        HideCharacter()
+    end
+end)
+
+-- Reset the toggle if the character dies/respawns
+Player.CharacterAdded:Connect(function()
+    Hidden = false
+    SavedPivot = nil
+    SavedAnchored = {}
+    Button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+end)
