@@ -1,0 +1,206 @@
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local LocalPlayer = Players.LocalPlayer
+
+local TargetName = "Sedatedlzhere"
+
+local UndergroundDistance = 10
+local BobHeight = 2
+local BobSpeed = 2
+
+local Hidden = false
+local ReturnCFrame = nil
+local FollowConnection = nil
+local BobTime = 0
+
+-- GUI
+local Gui = Instance.new("ScreenGui")
+Gui.Name = "UndergroundToggle"
+Gui.ResetOnSpawn = false
+Gui.IgnoreGuiInset = true
+Gui.Parent = game:GetService("CoreGui")
+
+local Button = Instance.new("TextButton")
+Button.Name = "Toggle"
+Button.Size = UDim2.fromOffset(60, 60)
+Button.Position = UDim2.new(0.1, 0, 0.5, 0)
+Button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+Button.BackgroundTransparency = 0
+Button.BorderSizePixel = 0
+Button.Text = ""
+Button.AutoButtonColor = true
+Button.Active = true
+Button.ZIndex = 999999
+Button.Parent = Gui
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(1, 0)
+Corner.Parent = Button
+
+-- Dragging
+local Dragging = false
+local DragStart
+local StartPosition
+
+Button.InputBegan:Connect(function(Input)
+    if Input.UserInputType == Enum.UserInputType.MouseButton1
+        or Input.UserInputType == Enum.UserInputType.Touch then
+
+        Dragging = true
+        DragStart = Input.Position
+        StartPosition = Button.Position
+
+        Input.Changed:Connect(function()
+            if Input.UserInputState == Enum.UserInputState.End then
+                Dragging = false
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(Input)
+    if not Dragging then return end
+
+    if Input.UserInputType ~= Enum.UserInputType.MouseMovement
+        and Input.UserInputType ~= Enum.UserInputType.Touch then
+        return
+    end
+
+    local Delta = Input.Position - DragStart
+
+    Button.Position = UDim2.new(
+        StartPosition.X.Scale,
+        StartPosition.X.Offset + Delta.X,
+        StartPosition.Y.Scale,
+        StartPosition.Y.Offset + Delta.Y
+    )
+end)
+
+local function GetTarget()
+    local Target = Players:FindFirstChild(TargetName)
+
+    if Target then
+        return Target
+    end
+
+    local Wanted = string.lower(TargetName)
+
+    for _, Player in ipairs(Players:GetPlayers()) do
+        if string.lower(Player.Name) == Wanted then
+            return Player
+        end
+    end
+
+    return nil
+end
+
+local function GetTargetRoot()
+    local Target = GetTarget()
+
+    if not Target or not Target.Character then
+        return nil
+    end
+
+    return Target.Character:FindFirstChild("HumanoidRootPart")
+end
+
+local function StopFollowing()
+    if FollowConnection then
+        FollowConnection:Disconnect()
+        FollowConnection = nil
+    end
+end
+
+local function Hide()
+    local Character = LocalPlayer.Character
+    local TargetRoot = GetTargetRoot()
+
+    if not Character or not TargetRoot then
+        warn("Sedatedlzhere was not found or has no character.")
+        return
+    end
+
+    -- Save Sedatedlzhere's exact original position + rotation
+    ReturnCFrame = TargetRoot.CFrame
+
+    Hidden = true
+    BobTime = 0
+
+    Button.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+
+    -- Go 10 studs underneath him
+    Character:PivotTo(
+        TargetRoot.CFrame *
+        CFrame.new(0, -UndergroundDistance, 0)
+    )
+
+    StopFollowing()
+
+    -- Follow him continuously
+    FollowConnection = RunService.Heartbeat:Connect(function(dt)
+        if not Hidden then
+            return
+        end
+
+        local CurrentCharacter = LocalPlayer.Character
+        local CurrentTargetRoot = GetTargetRoot()
+
+        if not CurrentCharacter or not CurrentTargetRoot then
+            return
+        end
+
+        BobTime += dt * BobSpeed
+
+        local BobOffset = math.sin(BobTime) * BobHeight
+
+        CurrentCharacter:PivotTo(
+            CurrentTargetRoot.CFrame *
+            CFrame.new(
+                0,
+                -UndergroundDistance + BobOffset,
+                0
+            )
+        )
+    end)
+end
+
+local function Show()
+    local Character = LocalPlayer.Character
+
+    if not Character then
+        return
+    end
+
+    Hidden = false
+    StopFollowing()
+
+    -- Return to Sedatedlzhere's original position and facing
+    if ReturnCFrame then
+        Character:PivotTo(ReturnCFrame)
+    end
+
+    ReturnCFrame = nil
+    BobTime = 0
+
+    Button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+end
+
+Button.Activated:Connect(function()
+    if Hidden then
+        Show()
+    else
+        Hide()
+    end
+end)
+
+LocalPlayer.CharacterAdded:Connect(function()
+    Hidden = false
+    StopFollowing()
+
+    ReturnCFrame = nil
+    BobTime = 0
+
+    Button.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+end)
